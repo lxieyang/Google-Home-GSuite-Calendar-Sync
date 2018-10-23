@@ -190,7 +190,8 @@ function generateEvents(untrackedEvents, personalCalendar, personalGoogleAccount
     var endTime = new Date(event.getEndTime())
     var eventTitle = event.getTitle()
     var eventDescription = event.getDescription()
-    var newPersonalEvent = personalCalendar.createEvent(eventTitle, startTime, endTime, {description: eventDescription})
+    var eventLocation = event.getLocation()
+    var newPersonalEvent = personalCalendar.createEvent(eventTitle, startTime, endTime, {description: eventDescription, location: eventLocation})
 
     // track this new event in our spreadsheet so we can check in future for any changes made to it
     sheet.appendRow([event.getId(), newPersonalEvent.getId(), eventTitle, startTime])
