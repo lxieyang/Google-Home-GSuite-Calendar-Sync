@@ -34,7 +34,7 @@ This script requires access to the following resources:
 
 3. Change all template references in the code (e.g. anything inside brackets `<...>`, such as `"<your.name>`) to a real/working value.
 
-4. Setup a "trigger" (in the project UI) for the script, e.g. ~~I set mine to run on a timer (every 5 mins).~~ I set it to run upon any changes in your G Suite calendar. This means if there is a change to an existing event, I'll know about it ~~in 5 minutes time~~ almost immediately. It's not perfect, but then again, this is just a hack after all.
+4. Setup a "trigger" (in the project UI) for the script, e.g. ~~I set mine to run on a timer (every 5 mins).~~ I set it to run upon any changes in your G Suite calendar. This means if there is a change to an existing event, I'll know about it ~~in 5 minutes time~~ almost immediately. It's also good to set up a daily trigger at some ungodly hour that you're likely asleep. This will make sure events that will happen much further down the road, say, 3 months later, will also be timely updated to your personal calendar. It's not perfect, but then again, this is just a hack after all.
 
 5. Run the script manually (~~_twice_!~~_once_!). ~~The first time you'll need to modify the script (see "[creating the spreadsheet](#creating-the-spreadsheet)" below for details), the second time is because you'll need to authorize the script to access your personal/G Suite calendar/email/spreadsheet features. After the script is authorized it'll run automatically in future without any issues.~~
 
