@@ -18,39 +18,59 @@ function myFunction() {
   // acquire a reference to your default calendar (which will be relative to the account this script executes under)
   // note: this script should be executed within your g suite account for this lookup to work as expected
   var gSuiteCalendar = CalendarApp.getDefaultCalendar()
+  
+  var daysAhead = 30
 
-  // we'll be looking at syncing events for today
-  var today = new Date()
-
-  // Uncomment following line if you want to test this script for a day in the future
-  // today.setDate(today.getDate() + 1)
-
-  var gSuiteEvents = gSuiteCalendar.getEventsForDay(today)
-  var trackGSuiteEvents = {}
+  var personalEvents = getCalendarEvents(personalCalendar, daysAhead)
+  
+  var companyIdentifier = "(from " + companyName + ")"
+  
+  // remove all events from this company
+  for (i = 0; i < personalEvents.length; i++) {
+    var ev = personalEvents[i]
+    // Logger.log("Processing event: " + ev.getTitle() + " | " + ev.getDescription())
+    if (ev.getDescription().toString().indexOf(companyIdentifier) !== -1) {
+      ev.deleteEvent()
+    }
+  }
+  
+  // create the new events
+  var gSuiteEvents = getCalendarEvents(gSuiteCalendar, daysAhead)
 
   gSuiteEvents.forEach(function(event){
-    // logEvents(event)
-    trackGSuiteEvents[event.getId()] = event
+    Logger.log(event.getTitle() + " | " + event.getStartTime())
+    var startTime = new Date(event.getStartTime())
+    var endTime = new Date(event.getEndTime())
+    var eventTitle = event.getTitle()
+    var eventDescription = event.getDescription() + " " + companyIdentifier
+    var eventLocation = event.getLocation()
+    personalCalendar.createEvent(eventTitle, startTime, endTime, {description: eventDescription, location: eventLocation})
   })
+  
+}
 
-  // id of spreadsheet (needed to track calendar events)
-  var sheetID = "<your_spreadsheet_id>"
-  var sheet = SpreadsheetApp.openById(sheetID)
-
-  // acquire data from spreadsheet
-  var range = sheet.getDataRange()
-  var rows = range.getValues()
-
-  // only bother to execute the following code if our spreadsheet has some tracked events
-  if (rows.length > 1) {
-    checkForEventUpdates(rows, trackGSuiteEvents, personalCalendar, personalGoogleAccountID, sheet, companyName)
-
-    // don't proceed further
-    return
+function getCalendarEvents(calendar, daysAhead) {
+  // day in seconds
+  var dayLengthInSeconds = 24 * 60 * 60 * 1000
+  
+  // today's date
+  var today = new Date()
+  
+  // dates
+  var dates = []
+  dates.push(today) // today
+  for (i = 1; i <= daysAhead; i++) {
+    dates.push(new Date(today.getTime() + dayLengthInSeconds * i)) // i days ahead
   }
-
-  // no tracked events were found in our spreadsheet, so let's start tracking them...
-  generateEvents(trackGSuiteEvents, personalCalendar, personalGoogleAccountID, sheet, companyName)
+  
+  // get events
+  var days = []  // each day's event
+  for (j = 0; j < dates.length; j++) {
+    days.push(calendar.getEventsForDay(dates[j]))
+  }
+  var events = [].concat.apply([], days); // https://stackoverflow.com/questions/10865025/merge-flatten-an-array-of-arrays-in-javascript
+  
+  return events
 }
 
 function logTriggerStart() {
@@ -59,153 +79,4 @@ function logTriggerStart() {
   var minute = d.getMinutes().toString()
 
   Logger.log("Event has been triggered: %s:%s", hour, minute)
-}
-
-function logEvents(e) {
-  Logger.log(e)
-  Logger.log("\nID: %s\nTitle: %s\nStart: %s\n End: %s", e.getId(), e.getTitle(), e.getStartTime(), e.getEndTime())
-}
-
-function createSpreadsheet(companyName) {
-  var sheet = SpreadsheetApp.create(companyName + " Sync")
-      sheet.appendRow(["gsuite_event_id", "personal_event_id", "event_title", "event_start"])
-  Logger.log(sheet.getId())
-}
-
-function checkForEventUpdates(rows, trackGSuiteEvents, personalCalendar, personalGoogleAccountID, sheet, companyName) {
-  // track rows that should be deleted
-  oldEvents = []
-
-  // loop over the events we have for today
-  for (current_event_id in trackGSuiteEvents) {
-    var event_found = false
-
-    // go over our spreadsheet data (row by row) and search for existing gsuite ids
-    rows.forEach(function(row, index){
-      // skip the first row (which is just our column headers)
-      if (index > 0) {
-        // check for old events and mark them for deletion (otherwise our spreadsheet loop would get longer over time)
-        markOldEvents(row, oldEvents, sheet, index)
-
-        // assign descriptive names to our spreadsheet data
-        var spreadsheet_gsuite_event_id = row[0]
-        var spreadsheet_personal_event_id = row[1]
-        var spreadsheet_gsuite_event_title = row[2]
-        var spreadsheet_gsuite_event_start = row[3]
-
-        // is the event we're looking at already tracked?
-        if (spreadsheet_gsuite_event_id == current_event_id) {
-          event_found = true
-          var gsuite_event = trackGSuiteEvents[spreadsheet_gsuite_event_id]
-          var time1 = (new Date(gsuite_event.getStartTime())).getTime()
-          var time2 = (new Date(spreadsheet_gsuite_event_start)).getTime()
-
-          var event_title = gsuite_event.getTitle()
-          var event_start = new Date(gsuite_event.getStartTime())
-          var event_end = new Date(gsuite_event.getEndTime())
-
-          var title_changed = event_title != spreadsheet_gsuite_event_title
-          var time_changed = time1 != time2
-
-          var personalCalendarEvent = personalCalendar.getEventById(spreadsheet_personal_event_id)
-          var subject = "Event from your " + companyName + " account has been updated"
-
-          if (title_changed && time_changed) {
-            updateTitle(personalCalendarEvent, index, sheet, event_title)
-            updateDate(personalCalendarEvent, index, sheet, event_start, event_end)
-
-            var body_title = "Title was updated from:\n" + spreadsheet_gsuite_event_title + "\n\nto:\n" + event_title + "\n\n"
-            var body_event = "Start/End time was updated to:\n\n" + event_start + "\n-\n" + event_end
-            var body = body_title + body_event
-            
-            GmailApp.sendEmail(personalGoogleAccountID, subject, removeBadSyntax(body))
-          }
-          else if (title_changed) {
-            updateTitle(personalCalendarEvent, index, sheet, event_title)
-
-            var body = "Title was updated from:\n" + spreadsheet_gsuite_event_title + "\n\nto:\n" + event_title
-            GmailApp.sendEmail(personalGoogleAccountID, subject, removeBadSyntax(body))
-          }
-          else if (time_changed) {
-            updateDate(personalCalendarEvent, index, sheet, event_start, event_end)
-
-            var body = event_title + "\n\nStart time was updated from:\n\n" + spreadsheet_gsuite_event_start + x + "\n\nto:\n\n" + event_start + "\n-\n" + event_end
-            GmailApp.sendEmail(personalGoogleAccountID, subject, removeBadSyntax(body))
-          }
-        }
-      }
-    })
-
-    // if we didn't find the current event, then create it
-    if (!event_found) {
-      filtered_event_object = {}
-      filtered_event_object[current_event_id] = trackGSuiteEvents[current_event_id]
-      generateEvents(filtered_event_object, personalCalendar, personalGoogleAccountID, sheet)
-    }
-  }
-
-  if (oldEvents.length > 0) {
-    oldEvents.forEach(function(rowNumber){
-      sheet.deleteRow(rowNumber)
-    })
-  }
-}
-
-function markOldEvents(row, oldEvents, sheet, index) {
-  var today = new Date()
-
-  // Uncomment following line if you want to test this script for a day in the future
-  // today.setDate(today.getDate() + 1)
-
-  var storedDay = new Date(row[3])
-
-  // if the current event doesn't match today's date, then mark it for deletion
-  if (storedDay.getDate() != today.getDate()) {
-    // to avoid marking the same row number multiple times we first check for it
-    if (oldEvents.indexOf(index+1) == -1) {
-      oldEvents.push(index+1)
-    }
-  }
-}
-
-function updateTitle(personalCalendar, index, sheet, event_title) {
-  var rangeForCurrentEventTitle = sheet.getRange("C" + (index+1))
-  sheet.setActiveRange(rangeForCurrentEventTitle)
-  rangeForCurrentEventTitle.setValue(event_title)
-  personalCalendar.setTitle(event_title)
-}
-
-function updateDate(personalCalendar, index, sheet, event_start, event_end) {
-  var rangeForCurrentEventDate = sheet.getRange("D" + (index+1))
-  sheet.setActiveRange(rangeForCurrentEventDate)
-  rangeForCurrentEventDate.setValue(event_start)
-  personalCalendar.setTime(event_start, event_end)
-}
-
-function generateEvents(untrackedEvents, personalCalendar, personalGoogleAccountID, sheet, companyName) {
-  // take incoming event object and generate a copy of the events within our personal google calendar
-  for (var eventID in untrackedEvents) {
-    var event = untrackedEvents[eventID]
-    var startTime = new Date(event.getStartTime())
-    var endTime = new Date(event.getEndTime())
-    var eventTitle = event.getTitle()
-    var eventDescription = event.getDescription()
-    var eventLocation = event.getLocation()
-    var newPersonalEvent = personalCalendar.createEvent(eventTitle, startTime, endTime, {description: eventDescription, location: eventLocation})
-
-    // track this new event in our spreadsheet so we can check in future for any changes made to it
-    sheet.appendRow([event.getId(), newPersonalEvent.getId(), eventTitle, startTime])
-
-    var body = "Title: " + eventTitle + "\n\nStarts: " + startTime + "\nEnds: " + endTime + "\n\nDescription:\n" + eventDescription
-
-    // send an email to let your personal google account know about the new event added
-    var subject = "Event from your " + companyName + " account has been synced"
-    GmailApp.sendEmail(personalGoogleAccountID, subject, removeBadSyntax(body))
-  }
-}
-
-function removeBadSyntax(b) {
-  var newbody = b.replace(/<br>/gi, "\n")
-  newbody = newbody.replace(/<a.+?href="([^"]+).+?>.+?<\/a>/gi, "$1")
-  return newbody;
 }
