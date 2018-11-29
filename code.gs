@@ -21,31 +21,36 @@ function myFunction() {
   
   var daysAhead = 30
 
-  var personalEvents = getCalendarEvents(personalCalendar, daysAhead)
+  try {
+    var personalEvents = getCalendarEvents(personalCalendar, daysAhead)
   
-  var companyIdentifier = "(from " + companyName + ")"
-  
-  // remove all events from this company
-  for (i = 0; i < personalEvents.length; i++) {
-    var ev = personalEvents[i]
-    // Logger.log("Processing event: " + ev.getTitle() + " | " + ev.getDescription())
-    if (ev.getDescription().toString().indexOf(companyIdentifier) !== -1) {
-      ev.deleteEvent()
+    var companyIdentifier = "(from " + companyName + ")"
+    
+    // remove all events from this company
+    for (i = 0; i < personalEvents.length; i++) {
+      var ev = personalEvents[i]
+      // Logger.log("Processing event: " + ev.getTitle() + " | " + ev.getDescription())
+      if (ev.getDescription().toString().indexOf(companyIdentifier) !== -1) {
+        ev.deleteEvent()
+      }
     }
-  }
+    
+    // create the new events
+    var gSuiteEvents = getCalendarEvents(gSuiteCalendar, daysAhead)
+    
+    gSuiteEvents.forEach(function(event){
+      Logger.log(event.getTitle() + " | " + event.getStartTime())
+      var startTime = new Date(event.getStartTime())
+      var endTime = new Date(event.getEndTime())
+      var eventTitle = event.getTitle()
+      var eventDescription = event.getDescription() + " " + companyIdentifier
+      var eventLocation = event.getLocation()
+      personalCalendar.createEvent(eventTitle, startTime, endTime, {description: eventDescription, location: eventLocation})
+    })
   
-  // create the new events
-  var gSuiteEvents = getCalendarEvents(gSuiteCalendar, daysAhead)
-
-  gSuiteEvents.forEach(function(event){
-    Logger.log(event.getTitle() + " | " + event.getStartTime())
-    var startTime = new Date(event.getStartTime())
-    var endTime = new Date(event.getEndTime())
-    var eventTitle = event.getTitle()
-    var eventDescription = event.getDescription() + " " + companyIdentifier
-    var eventLocation = event.getLocation()
-    personalCalendar.createEvent(eventTitle, startTime, endTime, {description: eventDescription, location: eventLocation})
-  })
+  } catch (err) {
+    Logger.log(err)
+  }
   
 }
 
